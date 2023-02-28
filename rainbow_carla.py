@@ -323,7 +323,7 @@ class DQNAgent:
                 writer.add_video(
                     tag="DQN Agent", vid_tensor=tchw_list.unsqueeze(0), global_step=frame_idx
                 )  # Unsqueeze adds batch --> BTCHW
-                chw_list
+                chw_list = []
 
         self.env.close()  # TODO: env_carla does not have a close() method
 
@@ -410,9 +410,9 @@ random.seed(seed)
 seed_torch(seed)
 
 # parameters
-num_frames = 100_000
+num_frames = 20_000
 memory_size = 10_000
-batch_size = 12
+batch_size = 128
 target_update = 100
 
 # train
