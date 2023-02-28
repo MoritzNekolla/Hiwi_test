@@ -28,6 +28,10 @@ from clearml import Task
 from env_carla import Environment
 from env_carla import IM_HEIGHT, IM_WIDTH, N_ACTIONS
 
+from moviepy import editor as mpy
+
+VIDEO_RECORDING = True
+REMOTE_EXECUTION = False
 
 Task.add_requirements(
     package_name="setuptools",
@@ -45,21 +49,21 @@ Task.add_requirements(
     package_name="numpy",
     package_version="",
 )
-
-writer = SummaryWriter()
+Task.add_requirements(
+    package_name="moviepy",
+    package_version="1.0.3",
+)
 
 task = Task.init(
     project_name="bogdoll/rainbow",
     task_name="Gym Baseline",
     reuse_last_task_id=False,
-    tags="gym",
+    tags="carla",
 )
 
 logger = task.get_logger()
 
-remote = False
-
-if remote:
+if REMOTE_EXECUTION:
     task.set_base_docker(
         docker_image="nvcr.io/nvidia/pytorch:22.12-py3",  # nvcr.io/nvidia/pytorch:22.12-py3 from https://catalog.ngc.nvidia.com/containers?filters=&orderBy=dateModifiedDESC&query=
         docker_arguments="-e NVIDIA_DRIVER_CAPABILITIES=all --network=host",
@@ -248,7 +252,7 @@ class DQNAgent:
 
         return loss.item()
 
-    def train(self, num_frames: int, plotting_interval: int = 1000):
+    def train(self, num_frames: int, plotting_interval: int = 10):
         """Train the agent."""
         self.is_test = False
 
@@ -258,7 +262,14 @@ class DQNAgent:
         scores = []
         score = 0
 
+        chw_list = []
+
         for frame_idx in range(1, num_frames + 1):
+            # Save episode video
+            if VIDEO_RECORDING:
+                chw = state.squeeze(0)  # Remove batch information from BCHW
+                chw_list.append(chw)
+
             action = self.select_action(state)
             next_state, reward, done = self.step(action)
 
@@ -291,35 +302,13 @@ class DQNAgent:
                 writer.add_scalar("Loss", loss, frame_idx)
 
             # plotting
-            # if frame_idx % plotting_interval == 0:
-            #     self._plot(frame_idx, scores, losses)
+            if frame_idx % plotting_interval == 0 and VIDEO_RECORDING:
+                tchw_list = torch.stack(chw_list)  # Adds "list" like entry --> TCHW
+                writer.add_video(
+                    tag="DQN Agent", vid_tensor=tchw_list.unsqueeze(0), global_step=frame_idx
+                )  # Unsqueeze adds batch --> BTCHW
 
         self.env.close()
-
-    def test(self, video_folder: str) -> None:
-        """Test the agent."""
-        self.is_test = True
-
-        # for recording a video
-        naive_env = self.env
-        self.env = gym.wrappers.RecordVideo(self.env, video_folder=video_folder)
-
-        state = self.env.reset()
-        done = False
-        score = 0
-
-        while not done:
-            action = self.select_action(state)
-            next_state, reward, done = self.step(action)
-
-            state = next_state
-            score += reward
-
-        print("score: ", score)
-        self.env.close()
-
-        # reset
-        self.env = naive_env
 
     def _compute_dqn_loss(self, samples: Dict[str, np.ndarray], gamma: float) -> torch.Tensor:
         """Return categorical dqn loss."""
@@ -412,6 +401,4 @@ target_update = 100
 agent = DQNAgent(env, memory_size, batch_size, target_update)
 agent.train(num_frames)
 
-# test
-video_folder = "videos/rainbow"
-agent.test(video_folder=video_folder)
+writer.flush()
