@@ -17,8 +17,13 @@ N_ACTIONS = 9
 RESET_SLEEP_TIME = 1
 
 
+FIXED_DELTA_SECONDS = 0.1
+SUBSTEP_DELTA = 0.01
+MAX_SUBSTEPS = 10
+EPISODE_TIME = 30
+
 class Environment:
-    def __init__(self, world="Town02", host="localhost", port=2000):
+    def __init__(self, world="Town02", host="tks-harper.fzi.de", port=2000):
         self.client = carla.Client(host, port)  # Connect to server
         self.client.set_timeout(10.0)
         self.world = self.client.load_world(world)
@@ -34,6 +39,19 @@ class Environment:
         # self.settings = self.world.get_settings()
         # self.settings.synchronous_mode = True # Enables synchronous mode
         # self.world.apply_settings(self.settings)
+
+        w_settings = self.world.get_settings()
+        w_settings.synchronous_mode = True
+        w_settings.fixed_delta_seconds = FIXED_DELTA_SECONDS # 10 fps | fixed_delta_seconds <= max_substep_delta_time * max_substeps
+        w_settings.substepping = True
+        w_settings.max_substep_delta_time = SUBSTEP_DELTA
+        w_settings.max_substeps = MAX_SUBSTEPS
+        self.world.apply_settings(w_settings)
+        self.fps_counter = 0
+        self.max_fps = int(1/FIXED_DELTA_SECONDS) * EPISODE_TIME
+
+        print(f"~~~~~~~~~~~~~~\n## Simulator settings ##\nFrames: {int(1/FIXED_DELTA_SECONDS)}\nSubstep_delta: {SUBSTEP_DELTA}\nMax_substeps: {MAX_SUBSTEPS}\n~~~~~~~~~~~~~~")
+
 
     def init_ego(self):
         self.vehicle_bp = self.bp_lib.find("vehicle.tesla.model3")
@@ -73,10 +91,13 @@ class Environment:
         )
         self.actor_list.append(self.ss_cam)
         self.ss_cam.listen(lambda data: self.__process_sensor_data(data))
+        
+        self.tick_world(times=10)
+        self.fps_counter = 0
 
-        time.sleep(
-            RESET_SLEEP_TIME
-        )  # sleep to get things started and to not detect a collision when the car spawns/falls from sky.
+        # time.sleep(
+        #     RESET_SLEEP_TIME
+        # )  # sleep to get things started and to not detect a collision when the car spawns/falls from sky.
 
         # Attach and listen to collision sensor
         self.col_sensor = self.world.spawn_actor(self.col_sensor_bp, self.col_sensor_transform, attach_to=self.vehicle)
@@ -124,6 +145,20 @@ class Environment:
 
         return self.get_observation(), reward, done, None
 
+    def getFPS_Counter(self):
+        return self.fps_counter
+
+    def isTimeExpired(self):
+        if self.fps_counter > self.max_fps:
+            return True
+        return False
+
+    # perform a/multiple world tick
+    def tick_world(self, times=1):
+        for x in range(times):
+            self.world.tick()
+            self.fps_counter += 1
+
     def get_observation(self):
         """Observations in PyTorch format BCHW"""
         image = self.observation.transpose((2, 0, 1))  # from HWC to CHW
@@ -148,4 +183,4 @@ class Environment:
 
     def __del__(self):
         for actor in self.actor_list:
-            actor.destroy()close
+            actor.destroy()

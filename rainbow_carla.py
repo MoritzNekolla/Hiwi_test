@@ -32,7 +32,8 @@ from env_carla import IM_HEIGHT, IM_WIDTH, N_ACTIONS
 from moviepy import editor as mpy
 
 VIDEO_RECORDING = True
-REMOTE_EXECUTION = False
+REMOTE_EXECUTION = True
+FIXED_DELTA_SECONDS = 0.1
 
 Task.add_requirements(
     package_name="setuptools",
@@ -276,6 +277,7 @@ class DQNAgent:
 
             action = self.select_action(state)
             next_state, reward, done = self.step(action)
+            env.tick_world()
 
             state = next_state
             score += reward
@@ -321,7 +323,7 @@ class DQNAgent:
             if frame_idx % plotting_interval == 0 and VIDEO_RECORDING:
                 tchw_list = torch.stack(chw_list)  # Adds "list" like entry --> TCHW
                 writer.add_video(
-                    tag="DQN Agent", vid_tensor=tchw_list.unsqueeze(0), global_step=frame_idx
+                    tag="DQN Agent", vid_tensor=tchw_list.unsqueeze(0), global_step=frame_idx, fps=int(1/FIXED_DELTA_SECONDS),
                 )  # Unsqueeze adds batch --> BTCHW
                 chw_list = []
 
@@ -392,7 +394,7 @@ class DQNAgent:
 
 
 # environment
-env = Environment(host="localhost", port=2000)  # This would be better as a command line argument
+env = Environment(host="tks-harper.fzi.de", port=2000)  # This would be better as a command line argument
 env.init_ego()
 
 seed = 777
