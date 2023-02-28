@@ -18,7 +18,7 @@ import torch.optim as optim
 from IPython.display import clear_output
 from torch.nn.utils import clip_grad_norm_
 
-from model import Network
+from model_pixel import Network
 from data import ReplayBuffer, PrioritizedReplayBuffer
 
 from torch.utils.tensorboard import SummaryWriter
@@ -26,8 +26,7 @@ from torch.utils.tensorboard import SummaryWriter
 from clearml import Task
 
 from env_carla import Environment
-from env_carla import IM_HEIGHT
-from env_carla import IM_WIDTH
+from env_carla import IM_HEIGHT, IM_WIDTH, N_ACTIONS
 
 
 Task.add_requirements(
@@ -130,8 +129,8 @@ class DQNAgent:
             atom_size (int): the unit number of support
             n_step (int): step number to calculate n-step td error
         """
-        obs_dim = env.observation_space.shape[0]
-        action_dim = env.action_space.n
+        obs_dim = [3, IM_HEIGHT, IM_WIDTH]
+        action_dim = N_ACTIONS
 
         self.env = env
         self.batch_size = batch_size
@@ -162,8 +161,8 @@ class DQNAgent:
         self.support = torch.linspace(self.v_min, self.v_max, self.atom_size).to(self.device)
 
         # networks: dqn, dqn_target
-        self.dqn = Network(obs_dim, action_dim, self.atom_size, self.support).to(self.device)
-        self.dqn_target = Network(obs_dim, action_dim, self.atom_size, self.support).to(self.device)
+        self.dqn = Network(action_dim, self.atom_size, self.support).to(self.device)
+        self.dqn_target = Network(action_dim, self.atom_size, self.support).to(self.device)
         self.dqn_target.load_state_dict(self.dqn.state_dict())
         self.dqn_target.eval()
 
@@ -190,7 +189,7 @@ class DQNAgent:
 
     def step(self, action: np.ndarray) -> Tuple[np.ndarray, np.float64, bool]:
         """Take an action and return the response of the env."""
-        next_state, reward, done, trunc, info = self.env.step(action)
+        next_state, reward, done, info = self.env.step(action)
 
         if not self.is_test:
             self.transition += [reward, next_state, done]
@@ -253,7 +252,7 @@ class DQNAgent:
         """Train the agent."""
         self.is_test = False
 
-        state, info = self.env.reset()
+        state = self.env.reset()
         update_cnt = 0
         losses = []
         scores = []
@@ -274,7 +273,7 @@ class DQNAgent:
 
             # if episode ends
             if done:
-                state, info = self.env.reset()
+                state = self.env.reset()
                 scores.append(score)
                 writer.add_scalar("Episode Reward", score, frame_idx)
                 score = 0
@@ -305,7 +304,7 @@ class DQNAgent:
         naive_env = self.env
         self.env = gym.wrappers.RecordVideo(self.env, video_folder=video_folder)
 
-        state, info = self.env.reset()
+        state = self.env.reset()
         done = False
         score = 0
 
@@ -387,8 +386,8 @@ class DQNAgent:
 
 
 # environment
-env_id = "CartPole-v1"
-env = gym.make(env_id)
+env = Environment(host="localhost", port=2000)
+env.init_ego()
 
 # seed = 777
 
@@ -406,7 +405,7 @@ env = gym.make(env_id)
 # parameters
 num_frames = 20000
 memory_size = 10000
-batch_size = 128
+batch_size = 16  # 128
 target_update = 100
 
 # train

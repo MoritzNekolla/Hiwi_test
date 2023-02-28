@@ -9,9 +9,11 @@ from typing import Deque, Dict, List, Tuple
 class ReplayBuffer:
     """A simple numpy replay buffer."""
 
-    def __init__(self, obs_dim: int, size: int, batch_size: int = 32, n_step: int = 1, gamma: float = 0.99):
-        self.obs_buf = np.zeros([size, obs_dim], dtype=np.float32)
-        self.next_obs_buf = np.zeros([size, obs_dim], dtype=np.float32)
+    def __init__(
+        self, obs_dim: Tuple[int, int, int], size: int, batch_size: int = 32, n_step: int = 1, gamma: float = 0.99
+    ):
+        self.obs_buf = np.zeros([size, *obs_dim], dtype=np.float32)  # * equals obs_dim[0],obs_dim[1]
+        self.next_obs_buf = np.zeros([size, *obs_dim], dtype=np.float32)
         self.acts_buf = np.zeros([size], dtype=np.float32)
         self.rews_buf = np.zeros([size], dtype=np.float32)
         self.done_buf = np.zeros(size, dtype=np.float32)

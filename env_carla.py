@@ -18,7 +18,7 @@ RESET_SLEEP_TIME = 1
 
 
 class Environment:
-    def __init__(self, world="Town02_Opt", host="localhost", port=2000):
+    def __init__(self, world="Town02", host="localhost", port=2000):
         self.client = carla.Client(host, port)  # Connect to server
         self.client.set_timeout(30.0)
         self.world = self.client.load_world(world)
