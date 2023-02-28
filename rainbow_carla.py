@@ -10,6 +10,8 @@
 
 from typing import Deque, Dict, List, Tuple
 
+import random
+
 import gymnasium as gym
 import matplotlib.pyplot as plt
 import numpy as np
@@ -252,7 +254,7 @@ class DQNAgent:
 
         return loss.item()
 
-    def train(self, num_frames: int, plotting_interval: int = 10):
+    def train(self, num_frames: int, plotting_interval: int = 500):
         """Train the agent."""
         self.is_test = False
 
@@ -261,6 +263,8 @@ class DQNAgent:
         losses = []
         scores = []
         score = 0
+
+        max_score = float("-inf")
 
         chw_list = []
 
@@ -287,6 +291,13 @@ class DQNAgent:
                 state = self.env.reset()
                 scores.append(score)
                 writer.add_scalar("Episode Reward", score, frame_idx)
+                if score > max_score:
+                    max_score = score
+                    if VIDEO_RECORDING:
+                        tchw_list = torch.stack(chw_list)  # Adds "list" like entry --> TCHW
+                        writer.add_video(
+                            tag="DQN Winner", vid_tensor=tchw_list.unsqueeze(0), global_step=frame_idx
+                        )  # Unsqueeze adds batch --> BTCHW
                 score = 0
 
             # if training is ready
@@ -375,21 +386,22 @@ class DQNAgent:
 
 
 # environment
-env = Environment(host="localhost", port=2000)
+env = Environment(host="localhost", port=2000)  # This would be better as a command line argument
 env.init_ego()
 
-# seed = 777
+seed = 777
 
-# def seed_torch(seed):
-#     torch.manual_seed(seed)
-#     if torch.backends.cudnn.enabled:
-#         torch.backends.cudnn.benchmark = False
-#         torch.backends.cudnn.deterministic = True
 
-# np.random.seed(seed)
-# random.seed(seed)
-# seed_torch(seed)
-# env.seed(seed)
+def seed_torch(seed):
+    torch.manual_seed(seed)
+    if torch.backends.cudnn.enabled:
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True
+
+
+np.random.seed(seed)
+random.seed(seed)
+seed_torch(seed)
 
 # parameters
 num_frames = 20000
