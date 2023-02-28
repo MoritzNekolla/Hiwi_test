@@ -269,6 +269,7 @@ class DQNAgent:
             if done:
                 state, info = self.env.reset()
                 scores.append(score)
+                writer.add_scalar("Episode Reward", score, frame_idx)
                 score = 0
 
             # if training is ready
@@ -281,9 +282,11 @@ class DQNAgent:
                 if update_cnt % self.target_update == 0:
                     self._target_hard_update()
 
+                writer.add_scalar("Loss", loss, frame_idx)
+
             # plotting
-            if frame_idx % plotting_interval == 0:
-                self._plot(frame_idx, scores, losses)
+            # if frame_idx % plotting_interval == 0:
+            #     self._plot(frame_idx, scores, losses)
 
         self.env.close()
 
