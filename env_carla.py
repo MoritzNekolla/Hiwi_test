@@ -20,7 +20,7 @@ RESET_SLEEP_TIME = 1
 class Environment:
     def __init__(self, world="Town02", host="localhost", port=2000):
         self.client = carla.Client(host, port)  # Connect to server
-        self.client.set_timeout(30.0)
+        self.client.set_timeout(10.0)
         self.world = self.client.load_world(world)
         self.bp_lib = self.world.get_blueprint_library()
         self.map = self.world.get_map()
@@ -115,7 +115,7 @@ class Environment:
         done = False
         if len(self.collision_hist) != 0:
             done = True
-            reward = -1
+            reward = -200
         elif v_kmh < 20:
             reward = -1
         else:
