@@ -12,7 +12,6 @@ from typing import Deque, Dict, List, Tuple
 
 import random
 
-import gymnasium as gym
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -33,7 +32,7 @@ from env_carla import IM_HEIGHT, IM_WIDTH, N_ACTIONS
 from moviepy import editor as mpy
 
 VIDEO_RECORDING = True
-REMOTE_EXECUTION = True
+REMOTE_EXECUTION = False
 
 Task.add_requirements(
     package_name="setuptools",
@@ -58,7 +57,7 @@ Task.add_requirements(
 
 task = Task.init(
     project_name="bogdoll/rainbow",
-    task_name="Gym Baseline",
+    task_name="Rainbow Baseline",
     reuse_last_task_id=False,
     tags="carla",
 )
@@ -102,7 +101,7 @@ class DQNAgent:
 
     def __init__(
         self,
-        env: gym.Env,
+        env: Environment,
         memory_size: int,
         batch_size: int,
         target_update: int,
@@ -254,7 +253,7 @@ class DQNAgent:
 
         return loss.item()
 
-    def train(self, num_frames: int, plotting_interval: int = 500):
+    def train(self, num_frames: int, plotting_interval: int = 100):
         """Train the agent."""
         self.is_test = False
 
@@ -267,6 +266,7 @@ class DQNAgent:
         max_score = float("-inf")
 
         chw_list = []
+        episode_length = 0
 
         for frame_idx in range(1, num_frames + 1):
             # Save episode video
@@ -291,6 +291,8 @@ class DQNAgent:
                 state = self.env.reset()
                 scores.append(score)
                 writer.add_scalar("Episode Reward", score, frame_idx)
+                writer.add_scalar("Episode Length", episode_length, frame_idx)
+                episode_length = 0
                 if score > max_score:
                     max_score = score
                     if VIDEO_RECORDING:
@@ -298,6 +300,7 @@ class DQNAgent:
                         writer.add_video(
                             tag="DQN Winner", vid_tensor=tchw_list.unsqueeze(0), global_step=frame_idx
                         )  # Unsqueeze adds batch --> BTCHW
+                        chw_list = []
                 score = 0
 
             # if training is ready
@@ -312,14 +315,17 @@ class DQNAgent:
 
                 writer.add_scalar("Loss", loss, frame_idx)
 
+            episode_length += 1
+
             # plotting
             if frame_idx % plotting_interval == 0 and VIDEO_RECORDING:
                 tchw_list = torch.stack(chw_list)  # Adds "list" like entry --> TCHW
                 writer.add_video(
                     tag="DQN Agent", vid_tensor=tchw_list.unsqueeze(0), global_step=frame_idx
                 )  # Unsqueeze adds batch --> BTCHW
+                chw_list
 
-        self.env.close()
+        self.env.close()  # TODO: env_carla does not have a close() method
 
     def _compute_dqn_loss(self, samples: Dict[str, np.ndarray], gamma: float) -> torch.Tensor:
         """Return categorical dqn loss."""
@@ -386,7 +392,7 @@ class DQNAgent:
 
 
 # environment
-env = Environment(host="ids-imperator.fzi.de", port=2000)  # This would be better as a command line argument
+env = Environment(host="localhost", port=2000)  # This would be better as a command line argument
 env.init_ego()
 
 seed = 777
@@ -404,7 +410,7 @@ random.seed(seed)
 seed_torch(seed)
 
 # parameters
-num_frames = 20_000
+num_frames = 100_000
 memory_size = 10_000
 batch_size = 12
 target_update = 100
@@ -412,5 +418,7 @@ target_update = 100
 # train
 agent = DQNAgent(env, memory_size, batch_size, target_update)
 agent.train(num_frames)
+
+# Evaluation (is_test)
 
 writer.flush()

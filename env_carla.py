@@ -114,6 +114,7 @@ class Environment:
         # Set reward and 'done' flag
         done = False
         if len(self.collision_hist) != 0:
+            print("Collided")
             done = True
             reward = -200
         elif v_kmh < 20:
@@ -130,6 +131,9 @@ class Environment:
         image = torch.from_numpy(image)
         image = image.unsqueeze(0)  # BCHW
         return image
+    
+    def close(self):
+        print("Close")
 
     def __process_sensor_data(self, image):
         """Observations directly viewable with OpenCV in CHW format"""
@@ -144,4 +148,4 @@ class Environment:
 
     def __del__(self):
         for actor in self.actor_list:
-            actor.destroy()
+            actor.destroy()close
