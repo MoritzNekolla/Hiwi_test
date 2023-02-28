@@ -18,13 +18,15 @@ fonttools==4.38.0
 google-auth==2.16.1
 google-auth-oauthlib==0.4.6
 grpcio==1.51.3
-gym==0.26.2
 gym-notices==0.0.8
+gymnasium==0.27.1
+gymnasium-notices==0.0.1
 idna==3.4
 importlib-metadata==6.0.0
 importlib-resources==5.12.0
 ipykernel==6.21.2
 ipython==8.10.0
+jax-jumpy==0.2.0
 jedi==0.18.2
 jupyter_client==8.0.3
 jupyter_core==5.2.0
