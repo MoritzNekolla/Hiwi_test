@@ -33,7 +33,7 @@ from env_carla import IM_HEIGHT, IM_WIDTH, N_ACTIONS
 from moviepy import editor as mpy
 
 VIDEO_RECORDING = True
-REMOTE_EXECUTION = False
+REMOTE_EXECUTION = True
 
 Task.add_requirements(
     package_name="setuptools",
@@ -386,7 +386,7 @@ class DQNAgent:
 
 
 # environment
-env = Environment(host="localhost", port=2000)  # This would be better as a command line argument
+env = Environment(host="ids-imperator.fzi.de", port=2000)  # This would be better as a command line argument
 env.init_ego()
 
 seed = 777
@@ -404,9 +404,9 @@ random.seed(seed)
 seed_torch(seed)
 
 # parameters
-num_frames = 20000
-memory_size = 10000
-batch_size = 16  # 128
+num_frames = 20_000
+memory_size = 10_000
+batch_size = 12
 target_update = 100
 
 # train
