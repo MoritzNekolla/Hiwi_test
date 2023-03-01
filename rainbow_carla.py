@@ -277,7 +277,6 @@ class DQNAgent:
 
             action = self.select_action(state)
             next_state, reward, done = self.step(action)
-            env.tick_world()
 
             state = next_state
             score += reward
@@ -295,14 +294,6 @@ class DQNAgent:
                 writer.add_scalar("Episode Reward", score, frame_idx)
                 writer.add_scalar("Episode Length", episode_length, frame_idx)
                 episode_length = 0
-                if score > max_score:
-                    max_score = score
-                    if VIDEO_RECORDING:
-                        tchw_list = torch.stack(chw_list)  # Adds "list" like entry --> TCHW
-                        writer.add_video(
-                            tag="DQN Winner", vid_tensor=tchw_list.unsqueeze(0), global_step=frame_idx
-                        )  # Unsqueeze adds batch --> BTCHW
-                        chw_list = []
                 score = 0
 
             # if training is ready
@@ -323,11 +314,14 @@ class DQNAgent:
             if frame_idx % plotting_interval == 0 and VIDEO_RECORDING:
                 tchw_list = torch.stack(chw_list)  # Adds "list" like entry --> TCHW
                 writer.add_video(
-                    tag="DQN Agent", vid_tensor=tchw_list.unsqueeze(0), global_step=frame_idx, fps=int(1/FIXED_DELTA_SECONDS),
+                    tag="DQN Agent",
+                    vid_tensor=tchw_list.unsqueeze(0),
+                    global_step=frame_idx,
+                    fps=int(1 / FIXED_DELTA_SECONDS),
                 )  # Unsqueeze adds batch --> BTCHW
                 chw_list = []
 
-        self.env.close()  # TODO: env_carla does not have a close() method
+        self.env.close()
 
     def _compute_dqn_loss(self, samples: Dict[str, np.ndarray], gamma: float) -> torch.Tensor:
         """Return categorical dqn loss."""

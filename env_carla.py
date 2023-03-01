@@ -22,6 +22,7 @@ SUBSTEP_DELTA = 0.01
 MAX_SUBSTEPS = 10
 EPISODE_TIME = 30
 
+
 class Environment:
     def __init__(self, world="Town02", host="tks-harper.fzi.de", port=2000):
         self.client = carla.Client(host, port)  # Connect to server
@@ -42,16 +43,19 @@ class Environment:
 
         w_settings = self.world.get_settings()
         w_settings.synchronous_mode = True
-        w_settings.fixed_delta_seconds = FIXED_DELTA_SECONDS # 10 fps | fixed_delta_seconds <= max_substep_delta_time * max_substeps
+        w_settings.fixed_delta_seconds = (
+            FIXED_DELTA_SECONDS  # 10 fps | fixed_delta_seconds <= max_substep_delta_time * max_substeps
+        )
         w_settings.substepping = True
         w_settings.max_substep_delta_time = SUBSTEP_DELTA
         w_settings.max_substeps = MAX_SUBSTEPS
         self.world.apply_settings(w_settings)
         self.fps_counter = 0
-        self.max_fps = int(1/FIXED_DELTA_SECONDS) * EPISODE_TIME
+        self.max_fps = int(1 / FIXED_DELTA_SECONDS) * EPISODE_TIME
 
-        print(f"~~~~~~~~~~~~~~\n## Simulator settings ##\nFrames: {int(1/FIXED_DELTA_SECONDS)}\nSubstep_delta: {SUBSTEP_DELTA}\nMax_substeps: {MAX_SUBSTEPS}\n~~~~~~~~~~~~~~")
-
+        print(
+            f"~~~~~~~~~~~~~~\n## Simulator settings ##\nFrames: {int(1/FIXED_DELTA_SECONDS)}\nSubstep_delta: {SUBSTEP_DELTA}\nMax_substeps: {MAX_SUBSTEPS}\n~~~~~~~~~~~~~~"
+        )
 
     def init_ego(self):
         self.vehicle_bp = self.bp_lib.find("vehicle.tesla.model3")
@@ -91,7 +95,7 @@ class Environment:
         )
         self.actor_list.append(self.ss_cam)
         self.ss_cam.listen(lambda data: self.__process_sensor_data(data))
-        
+
         self.tick_world(times=10)
         self.fps_counter = 0
 
@@ -127,6 +131,8 @@ class Environment:
             self.vehicle.apply_control(carla.VehicleControl(throttle=0, steer=-1))
         elif action == 8:
             self.vehicle.apply_control(carla.VehicleControl(throttle=0, steer=1))
+
+        self.tick_world()
 
         # Get velocity of vehicle
         v = self.vehicle.get_velocity()
@@ -166,7 +172,7 @@ class Environment:
         image = torch.from_numpy(image)
         image = image.unsqueeze(0)  # BCHW
         return image
-    
+
     def close(self):
         print("Close")
 
