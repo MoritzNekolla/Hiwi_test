@@ -276,6 +276,7 @@ class DQNAgent:
                 chw_list.append(chw)
 
             action = self.select_action(state)
+            writer.add_scalar("Selected Action", action, frame_idx)
             next_state, reward, done = self.step(action)
 
             state = next_state
@@ -286,6 +287,9 @@ class DQNAgent:
             # PER: increase beta
             fraction = min(frame_idx / num_frames, 1.0)
             self.beta = self.beta + fraction * (1.0 - self.beta)
+
+            writer.add_scalar("Fraction", fraction, frame_idx)
+            writer.add_scalar("Beta", self.beta, frame_idx)
 
             # if episode ends
             if done:
@@ -388,7 +392,7 @@ class DQNAgent:
 
 
 # environment
-env = Environment(host="tks-harper.fzi.de", port=2000)  # This would be better as a command line argument
+env = Environment(host="ids-imperator.fzi.de", port=2000)  # This would be better as a command line argument
 env.init_ego()
 
 seed = 777
