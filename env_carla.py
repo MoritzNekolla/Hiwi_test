@@ -96,12 +96,8 @@ class Environment:
         self.actor_list.append(self.ss_cam)
         self.ss_cam.listen(lambda data: self.__process_sensor_data(data))
 
-        self.tick_world(times=10)
+        # self.tick_world(times=10) Let's see if we need this anymore in 0.9.14
         self.fps_counter = 0
-
-        # time.sleep(
-        #     RESET_SLEEP_TIME
-        # )  # sleep to get things started and to not detect a collision when the car spawns/falls from sky.
 
         # Attach and listen to collision sensor
         self.col_sensor = self.world.spawn_actor(self.col_sensor_bp, self.col_sensor_transform, attach_to=self.vehicle)
@@ -141,7 +137,7 @@ class Environment:
         # Set reward and 'done' flag
         done = False
         if len(self.collision_hist) != 0:
-            print("Collided")
+            print("Collided with v = " and v_kmh and " km/h")
             done = True
             reward = -200
         elif v_kmh < 20:
