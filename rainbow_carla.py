@@ -32,7 +32,7 @@ from env_carla import IM_HEIGHT, IM_WIDTH, N_ACTIONS
 from moviepy import editor as mpy
 
 VIDEO_RECORDING = True
-REMOTE_EXECUTION = False
+REMOTE_EXECUTION = True
 FIXED_DELTA_SECONDS = 0.1
 
 Task.add_requirements(
@@ -392,7 +392,7 @@ class DQNAgent:
 
 
 # environment
-env = Environment(host="ids-imperator.fzi.de", port=2000)  # This would be better as a command line argument
+env = Environment(host="tks-iris.fzi.de", port=2200)  # This would be better as a command line argument
 env.init_ego()
 
 seed = 777

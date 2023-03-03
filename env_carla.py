@@ -103,7 +103,9 @@ class Environment:
         self.col_sensor = self.world.spawn_actor(self.col_sensor_bp, self.col_sensor_transform, attach_to=self.vehicle)
         self.actor_list.append(self.col_sensor)
         self.col_sensor.listen(lambda event: self.__process_collision_data(event))
-
+        
+        self.tick_world(times=6)
+        
         self.episode_start = time.time()
         return self.get_observation()
 
