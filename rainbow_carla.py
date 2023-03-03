@@ -32,7 +32,7 @@ from env_carla import IM_HEIGHT, IM_WIDTH, N_ACTIONS
 from moviepy import editor as mpy
 
 VIDEO_RECORDING = True
-REMOTE_EXECUTION = True
+REMOTE_EXECUTION = False
 FIXED_DELTA_SECONDS = 0.1
 
 Task.add_requirements(
