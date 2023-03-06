@@ -37,6 +37,7 @@ class Environment:
         self.IM_HEIGHT = IM_HEIGHT
         self.agent_transform = None
 
+        self.trajectory_list = None
         # Enable synchronous mode between server and client
         # self.settings = self.world.get_settings()
         # self.settings.synchronous_mode = True # Enables synchronous mode
@@ -104,11 +105,24 @@ class Environment:
         self.col_sensor = self.world.spawn_actor(self.col_sensor_bp, self.col_sensor_transform, attach_to=self.vehicle)
         self.actor_list.append(self.col_sensor)
         self.col_sensor.listen(lambda event: self.__process_collision_data(event))
+
+        self.set_goalPoint()
         
         self.tick_world(times=6)
         
         self.episode_start = time.time()
         return self.get_observation()
+    
+    def set_goalPoint(self):
+        ego_map_point = self.getEgoWaypoint() # closest map point to the spawn point
+        tmp_trajectory_list = [ego_map_point]
+        self.trajectory_list = [[ego_map_point.transform.location.x, ego_map_point.transform.location.y]]
+        for x in range(60):
+            next_point = tmp_trajectory_list[-1].next(2.)[0]
+            next_point = next_point.next(2.)[0]
+            tmp_trajectory_list.append(next_point)
+            self.trajectory_list.append([next_point.transform.location.x, next_point.transform.location.y])
+
 
     def step(self, action):
         # Easy actions: Steer left, center, right (0, 1, 2)
@@ -133,28 +147,122 @@ class Environment:
 
         self.tick_world()
 
-        # Get velocity of vehicle
-        v = self.vehicle.get_velocity()
-        v_kmh = int(3.6 * math.sqrt(v.x**2 + v.y**2 + v.z**2))
+        # # Get velocity of vehicle
+        # v = self.vehicle.get_velocity()
+        # v_kmh = int(3.6 * math.sqrt(v.x**2 + v.y**2 + v.z**2))
+        # v_m_s = ((v_kmh * 1000) / 60) / 60
+        # lon_speed = self.get_vehicle_lon_speed(self.vehicle)
 
-        # Set reward and 'done' flag
-        done = False
-        if len(self.collision_hist) != 0:
-            print(f"Collided with v = {v_kmh} km/h")
-            done = True
-            reward = -200
-        elif v_kmh < 20:
-            reward = -1
-        else:
-            reward = 1
+        # # Set reward and 'done' flag
+        # reward_collision = 0
+        # out_of_map = 0
+        # r_fast = 0
 
-        ego_transform = self.agent_transform
-        ego_map_point = self.getEgoWaypoint()
-        distance_ego = ego_transform.location.distance(ego_map_point.transform.location)
-        if distance_ego > 1.:
-            reward = -1
+        # done = False
+        # if len(self.collision_hist) != 0:
+        #     # print(f"Collided with v = {v_kmh} km/h")
+        #     done = True
+        #     reward_collision = -1
+        
+        # if v_m_s > 8:
+        #     r_fast = -1
+
+
+        # ego_transform = self.agent_transform
+        # ego_map_point = self.getEgoWaypoint()
+        # distance_ego = ego_transform.location.distance(ego_map_point.transform.location)
+        # if distance_ego > 1.:
+        #     out_of_map = -1
+
+        # reward =  200*reward_collision + lon_speed + 10*r_fast + out_of_map -5*alpha + 0.2r_lat - 0.1
+
+        reward, done = self._get_reward()
 
         return self.get_observation(), reward, done, None
+    
+    def _get_reward(self):
+        """Calculate the step reward."""
+        done = 0
+
+        # reward for speed tracking
+        v = self.vehicle.get_velocity()
+        speed = np.sqrt(v.x**2 + v.y**2)
+        r_speed = -abs(speed - self.desired_speed)
+        
+        # reward for collision
+        r_collision = 0
+        if len(self.collision_hist) > 0:
+            r_collision = -1
+            done = 1
+
+        # reward for steering:
+        r_steer = -self.vehicle.get_control().steer**2
+
+        # reward for out of lane
+        kk = self.get_Vehicle_positionVec()
+        ego_x = kk[0]
+        ego_y = kk[1]
+        dis, w = self.get_lane_dis(self.trajectory_list, ego_x, ego_y)
+        r_out = 0
+        if abs(dis) > 2.0:
+            r_out = -1
+
+        # longitudinal speed
+        lspeed = np.array([v.x, v.y])
+        lspeed_lon = np.dot(lspeed, w)
+            # 'out_lane_thres': 2.0,  # threshold for out of lane
+            # 'desired_speed': 8,  # desired speed (m/s)
+        # cost for too fast
+        r_fast = 0
+        if lspeed_lon > 8:
+            r_fast = -1
+
+        # cost for lateral acceleration
+        r_lat = - abs(self.vehicle.get_control().steer) * lspeed_lon**2
+
+        r = 200*r_collision + 1*lspeed_lon + 10*r_fast + 1*r_out + r_steer*5 + 0.2*r_lat - 0.1
+
+        return r, done
+    
+    def get_lane_dis(waypoints, x, y):
+        """
+        Calculate distance from (x, y) to waypoints.
+        :param waypoints: a list of list storing waypoints like [[x0, y0], [x1, y1], ...]
+        :param x: x position of vehicle
+        :param y: y position of vehicle
+        :return: a tuple of the distance and the closest waypoint orientation
+        """
+        dis_min = 1000
+        waypt = waypoints[0]
+        for pt in waypoints:
+            d = np.sqrt((x-pt[0])**2 + (y-pt[1])**2)
+            if d < dis_min:
+                dis_min = d
+                waypt=pt
+        vec = np.array([x - waypt[0], y - waypt[1]])
+        lv = np.linalg.norm(np.array(vec))
+        w = np.array([np.cos(waypt[2]/180*np.pi), np.sin(waypt[2]/180*np.pi)])
+        cross = np.cross(w, vec/lv)
+        dis = - lv * cross
+        return dis, 
+    
+    def get_vehicle_lon_speed(carla_vehicle: carla.Vehicle):
+        """
+            Get the longitudinal speed of a carla vehicle
+            :param carla_vehicle: the carla vehicle
+            :type carla_vehicle: carla.Vehicle
+            :return: speed of a carla vehicle [m/s]
+            :rtype: float64
+        """
+        carla_velocity_vec3 = carla_vehicle.get_velocity()
+        vec4 = np.array([carla_velocity_vec3.x,
+                            carla_velocity_vec3.y,
+                            carla_velocity_vec3.z, 1]).reshape(4, 1)
+        carla_trans = np.array(carla_vehicle.get_transform().get_matrix())
+        carla_trans.reshape(4, 4)
+        carla_trans[0:3, 3] = 0.0
+        vel_in_vehicle = np.linalg.inv(carla_trans) @ vec4
+        return vel_in_vehicle[0]
 
     def getFPS_Counter(self):
         return self.fps_counter
@@ -181,6 +289,11 @@ class Environment:
     #get vehicle location and rotation (0-360 degrees)
     def get_Vehicle_transform(self):
         return self.vehicle.get_transform()
+    
+    #get vehicle location
+    def get_Vehicle_positionVec(self):
+        position = self.vehicle.get_transform().location
+        return np.array([position.x, position.y, position.z])
 
     def get_observation(self):
         """Observations in PyTorch format BCHW"""
