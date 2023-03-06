@@ -213,6 +213,9 @@ class Environment:
         r_out = 0
         if abs(dis) > 2.0:
             r_out = -1
+        
+        if abs(dis) > 2. *2:
+            done = 1
 
         # longitudinal speed
         lspeed = np.array([v.x, v.y])
