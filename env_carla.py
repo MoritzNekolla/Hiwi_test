@@ -35,6 +35,7 @@ class Environment:
         self.actor_list = []
         self.IM_WIDTH = IM_WIDTH
         self.IM_HEIGHT = IM_HEIGHT
+        self.agent_transform = None
 
         # Enable synchronous mode between server and client
         # self.settings = self.world.get_settings()
@@ -139,13 +140,19 @@ class Environment:
         # Set reward and 'done' flag
         done = False
         if len(self.collision_hist) != 0:
-            print("Collided with v = " and v_kmh and " km/h")
+            print(f"Collided with v = {v_kmh} km/h")
             done = True
             reward = -200
         elif v_kmh < 20:
             reward = -1
         else:
             reward = 1
+
+        ego_transform = self.agent_transform
+        ego_map_point = self.getEgoWaypoint()
+        distance_ego = ego_transform.location.distance(ego_map_point.transform.location)
+        if distance_ego > 1.:
+            reward = -1
 
         return self.get_observation(), reward, done, None
 
@@ -157,14 +164,27 @@ class Environment:
             return True
         return False
 
+    def getEgoWaypoint(self):
+        # vehicle_loc = self.vehicle.get_location()
+        vehicle_loc = self.agent_transform.location
+        wp = self.map.get_waypoint(vehicle_loc, project_to_road=True,
+                      lane_type=carla.LaneType.Driving)
+
+        return wp
+    
     # perform a/multiple world tick
     def tick_world(self, times=1):
         for x in range(times):
             self.world.tick()
             self.fps_counter += 1
 
+    #get vehicle location and rotation (0-360 degrees)
+    def get_Vehicle_transform(self):
+        return self.vehicle.get_transform()
+
     def get_observation(self):
         """Observations in PyTorch format BCHW"""
+        self.agent_transform = self.get_Vehicle_transform()
         image = self.observation.transpose((2, 0, 1))  # from HWC to CHW
         image = np.ascontiguousarray(image, dtype=np.float32) / 255
         image = torch.from_numpy(image)

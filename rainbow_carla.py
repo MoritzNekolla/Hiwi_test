@@ -392,7 +392,7 @@ class DQNAgent:
 
 
 # environment
-env = Environment(host="tks-iris.fzi.de", port=2200)  # This would be better as a command line argument
+env = Environment(host="tks-hertz.fzi.de", port=2200)  # This would be better as a command line argument
 env.init_ego()
 
 seed = 777
@@ -410,8 +410,8 @@ random.seed(seed)
 seed_torch(seed)
 
 # parameters
-num_frames = 20_000
-memory_size = 10_000
+num_frames = 2_000_000
+memory_size = 10_00
 batch_size = 128
 target_update = 100
 

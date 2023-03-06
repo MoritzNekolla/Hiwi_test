@@ -41,7 +41,6 @@ class ReplayBuffer:
     ) -> Tuple[np.ndarray, np.ndarray, float, np.ndarray, bool]:
         transition = (obs, act, rew, next_obs, done)
         self.n_step_buffer.append(transition)
-
         # single step transition is not ready
         if len(self.n_step_buffer) < self.n_step:
             return ()
@@ -146,7 +145,6 @@ class PrioritizedReplayBuffer(ReplayBuffer):
     ) -> Tuple[np.ndarray, np.ndarray, float, np.ndarray, bool]:
         """Store experience and priority."""
         transition = super().store(obs, act, rew, next_obs, done)
-
         if transition:
             self.sum_tree[self.tree_ptr] = self.max_priority**self.alpha
             self.min_tree[self.tree_ptr] = self.max_priority**self.alpha
