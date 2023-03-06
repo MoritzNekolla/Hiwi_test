@@ -106,22 +106,29 @@ class Environment:
         self.actor_list.append(self.col_sensor)
         self.col_sensor.listen(lambda event: self.__process_collision_data(event))
 
-        self.set_goalPoint()
         
         self.tick_world(times=6)
         
         self.episode_start = time.time()
-        return self.get_observation()
+
+        obs = self.get_observation()
+
+        self.set_goalPoint()
+
+        return obs
     
     def set_goalPoint(self):
         ego_map_point = self.getEgoWaypoint() # closest map point to the spawn point
         tmp_trajectory_list = [ego_map_point]
-        self.trajectory_list = [[ego_map_point.transform.location.x, ego_map_point.transform.location.y]]
+        self.trajectory_list = [[ego_map_point.transform.location.x, ego_map_point.transform.location.y, ego_map_point.transform.rotation.yaw]]
         for x in range(60):
             next_point = tmp_trajectory_list[-1].next(2.)[0]
             next_point = next_point.next(2.)[0]
             tmp_trajectory_list.append(next_point)
-            self.trajectory_list.append([next_point.transform.location.x, next_point.transform.location.y])
+            self.trajectory_list.append([next_point.transform.location.x, next_point.transform.location.y, next_point.transform.rotation.yaw])
+
+        # for x in self.trajectory_list:
+        #     print(x)
 
 
     def step(self, action):
@@ -186,8 +193,8 @@ class Environment:
 
         # reward for speed tracking
         v = self.vehicle.get_velocity()
-        speed = np.sqrt(v.x**2 + v.y**2)
-        r_speed = -abs(speed - self.desired_speed)
+        # speed = np.sqrt(v.x**2 + v.y**2)
+        # r_speed = -abs(speed - self.desired_speed)
         
         # reward for collision
         r_collision = 0
@@ -224,7 +231,7 @@ class Environment:
 
         return r, done
     
-    def get_lane_dis(waypoints, x, y):
+    def get_lane_dis(self, waypoints, x, y):
         """
         Calculate distance from (x, y) to waypoints.
         :param waypoints: a list of list storing waypoints like [[x0, y0], [x1, y1], ...]
@@ -244,7 +251,7 @@ class Environment:
         w = np.array([np.cos(waypt[2]/180*np.pi), np.sin(waypt[2]/180*np.pi)])
         cross = np.cross(w, vec/lv)
         dis = - lv * cross
-        return dis, 
+        return dis, w
     
     def get_vehicle_lon_speed(carla_vehicle: carla.Vehicle):
         """
