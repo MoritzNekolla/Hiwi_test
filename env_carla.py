@@ -189,7 +189,7 @@ class Environment:
     
     def _get_reward(self):
         """Calculate the step reward."""
-        done = 0
+        done = False
 
         # reward for speed tracking
         v = self.vehicle.get_velocity()
@@ -200,7 +200,7 @@ class Environment:
         r_collision = 0
         if len(self.collision_hist) > 0:
             r_collision = -1
-            done = 1
+            done = True
 
         # reward for steering:
         r_steer = -self.vehicle.get_control().steer**2
@@ -213,9 +213,8 @@ class Environment:
         r_out = 0
         if abs(dis) > 2.0:
             r_out = -1
+            done = True
         
-        if abs(dis) > 2. *2:
-            done = 1
 
         # longitudinal speed
         lspeed = np.array([v.x, v.y])

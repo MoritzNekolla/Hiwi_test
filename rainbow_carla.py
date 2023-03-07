@@ -392,7 +392,7 @@ class DQNAgent:
 
 
 # environment
-env = Environment(host="tks-hubbard.fzi.de", port=2200)  # This would be better as a command line argument
+env = Environment(host="tks-hertz.fzi.de", port=2200)  # This would be better as a command line argument
 env.init_ego()
 
 seed = 777
