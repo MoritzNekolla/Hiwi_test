@@ -11,7 +11,7 @@
 from typing import Deque, Dict, List, Tuple
 
 import random
-
+import argparse
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -31,50 +31,72 @@ from env_carla import IM_HEIGHT, IM_WIDTH, N_ACTIONS
 
 from moviepy import editor as mpy
 
+##
+HOST = "tks-holden.fzi.de"
+PORT = 2200
+WORLDS = ["Town01_Opt", "Town02_Opt", "Town03_Opt", "Town04_Opt","Town05_Opt"]
+SPAWN_DEVIATION = True
+TRAJECTORY_VISIBLE = True
+GOAL_STATE = True
+LIDAR = False
+REPLAYBUFFER_SIZE = 5000
+
+
+##
+
 VIDEO_RECORDING = True
 REMOTE_EXECUTION = True
 FIXED_DELTA_SECONDS = 0.1
 
-Task.add_requirements(
+def init_clearML(clearmlOn, world):
+    Task.add_requirements(
     package_name="setuptools",
     package_version="59.5.0",
-)
-Task.add_requirements(
-    package_name="torch",
-    package_version="",
-)
-Task.add_requirements(
-    package_name="torchvision",
-    package_version="",
-)
-Task.add_requirements(
-    package_name="numpy",
-    package_version="",
-)
-Task.add_requirements(
-    package_name="moviepy",
-    package_version="1.0.3",
-)
-
-task = Task.init(
-    project_name="bogdoll/rainbow",
-    task_name="Rainbow Baseline",
-    reuse_last_task_id=False,
-    tags="carla",
-)
-
-logger = task.get_logger()
-
-if REMOTE_EXECUTION:
-    task.set_base_docker(
-        docker_image="nvcr.io/nvidia/pytorch:22.12-py3",  # nvcr.io/nvidia/pytorch:22.12-py3 from https://catalog.ngc.nvidia.com/containers?filters=&orderBy=dateModifiedDESC&query=
-        docker_arguments="-e NVIDIA_DRIVER_CAPABILITIES=all --network=host",
-        docker_setup_bash_script=["apt-get install -y libgl1"],
     )
+    Task.add_requirements(
+        package_name="torch",
+        package_version="",
+    )
+    Task.add_requirements(
+        package_name="torchvision",
+        package_version="",
+    )
+    Task.add_requirements(
+        package_name="numpy",
+        package_version="",
+    )
+    Task.add_requirements(
+        package_name="moviepy",
+        package_version="1.0.3",
+    )
+    # Task.add_requirements("requirements.txt")
+    Task.add_requirements("moviepy", "1.0.3")
+    task = Task.init(project_name="bogdoll/Anomaly_detection_Moritz", task_name="Test", output_uri="s3://tks-zx.fzi.de:9000/clearml")
+    task.set_base_docker(
+            "nvcr.io/nvidia/pytorch:21.10-py3", 
+            docker_setup_bash_script="apt-get update && apt-get install -y python3-opencv",
+            docker_arguments="-e NVIDIA_DRIVER_CAPABILITIES=all"  # --ipc=host",   
+            )
+    
+    
+    parameters = {
+        "port": PORT,
+        "host": HOST,
+        "world": world,
+        "spawn_deviation": SPAWN_DEVIATION,
+        "trajectory_is_visible": TRAJECTORY_VISIBLE,
+        "goal_state_exists": GOAL_STATE,
+        "addtional_lidar": LIDAR,
+        "replaybuffer_size": REPLAYBUFFER_SIZE
+    }
+    #start ClearML logging
+    task.connect(parameters)
+    if clearmlOn:
+        # task.execute_remotely('rtx3090', clone=False, exit_process=True) 
+        task.execute_remotely('docker', clone=False, exit_process=True) 
 
-    task.execute_remotely("docker", clone=False, exit_process=True)
+    return task
 
-writer = SummaryWriter()
 
 
 class DQNAgent:
@@ -254,7 +276,7 @@ class DQNAgent:
 
         return loss.item()
 
-    def train(self, num_frames: int, plotting_interval: int = 100):
+    def train(self, writer, num_frames: int, plotting_interval: int = 100):
         """Train the agent."""
         self.is_test = False
 
@@ -391,34 +413,73 @@ class DQNAgent:
         plt.show()
 
 
-# environment
-env = Environment(host="tks-hertz.fzi.de", port=2200)  # This would be better as a command line argument
-env.init_ego()
 
-seed = 777
+def main(clearmlOn):
+    
+    world = random.choice(WORLDS)
+    task = init_clearML(clearmlOn, world)
+    logger = task.get_logger()
+    writer = SummaryWriter()
+
+    # environment
+    env = Environment(world=world, host=HOST, port=PORT)  # This would be better as a command line argument
+    env.init_ego()
+
+    seed = 777
 
 
-def seed_torch(seed):
-    torch.manual_seed(seed)
-    if torch.backends.cudnn.enabled:
-        torch.backends.cudnn.benchmark = False
-        torch.backends.cudnn.deterministic = True
+    def seed_torch(seed):
+        torch.manual_seed(seed)
+        if torch.backends.cudnn.enabled:
+            torch.backends.cudnn.benchmark = False
+            torch.backends.cudnn.deterministic = True
 
 
-np.random.seed(seed)
-random.seed(seed)
-seed_torch(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+    seed_torch(seed)
 
-# parameters
-num_frames = 2_000_000
-memory_size = 10_00
-batch_size = 128
-target_update = 100
+    # parameters
+    num_frames = 40_000
+    batch_size = 128
+    target_update = 100
 
-# train
-agent = DQNAgent(env, memory_size, batch_size, target_update)
-agent.train(num_frames)
+    # train
+    agent = DQNAgent(env, REPLAYBUFFER_SIZE, batch_size, target_update)
+    agent.train(num_frames, writer)
 
-# Evaluation (is_test)
+    # Evaluation (is_test)
 
-writer.flush()
+    writer.flush()
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--clearml", type=str, default=0)
+
+    args = parser.parse_args()
+    clearml = args.clearml
+
+    # if mode == "0":
+    #     withAE = False
+    #     concatAE = False
+    #     print(f"~~~~~~~~~~~~~~\n### Mode: Baseline RL Agent! \n~~~~~~~~~~~~~~")
+    # elif mode == "1":
+    #     withAE = True
+    #     concatAE = False
+    #     print(f"~~~~~~~~~~~~~~\n### Mode: Enriched Reward RL Agent \n~~~~~~~~~~~~~~")
+    # elif mode == "2":
+    #     withAE = True
+    #     concatAE = True
+    #     print(f"~~~~~~~~~~~~~~\n### Mode: Observation + Anomaly RL Agent! \n~~~~~~~~~~~~~~")
+    
+    # else:
+    #     print("!!! Wrong mode flag. (0 = Baseline | 1 = Enriched Reward | 2 = Observation + Anomaly)")
+
+    if clearml == "0":
+        clearmlOn = False
+    elif clearml == "1":
+        clearmlOn = True
+    else:
+        print("!!! Wrong clearml flag. (0 = False | 1 = True)")
+        
+    main(clearmlOn)

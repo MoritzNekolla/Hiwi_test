@@ -24,7 +24,7 @@ EPISODE_TIME = 30
 
 
 class Environment:
-    def __init__(self, world="Town02", host="tks-harper.fzi.de", port=2000):
+    def __init__(self, world="Town02", host="tks-harper.fzi.de", port=2000, roadGraph=True):
         self.client = carla.Client(host, port)  # Connect to server
         self.client.set_timeout(10.0)
         self.world = self.client.load_world(world)
@@ -38,6 +38,7 @@ class Environment:
         self.agent_transform = None
 
         self.trajectory_list = None
+        self.roadGraph = roadGraph
         # Enable synchronous mode between server and client
         # self.settings = self.world.get_settings()
         # self.settings.synchronous_mode = True # Enables synchronous mode
@@ -107,7 +108,9 @@ class Environment:
         self.col_sensor.listen(lambda event: self.__process_collision_data(event))
 
         
-        self.tick_world(times=6)
+        self.tick_world(times=int(1 / FIXED_DELTA_SECONDS))
+        if self.roadGraph:
+            self.plotTrajectory()
         
         self.episode_start = time.time()
 
@@ -127,9 +130,16 @@ class Environment:
             tmp_trajectory_list.append(next_point)
             self.trajectory_list.append([next_point.transform.location.x, next_point.transform.location.y, next_point.transform.rotation.yaw])
 
-        # for x in self.trajectory_list:
-        #     print(x)
+        self.getGoalPoint = self.trajectory_list[-1][:2]
 
+    # plots the path from spawn to goal
+    def plotTrajectory(self):
+        lifetime=1.
+        for x in range(len(self.trajectory_list)-1):
+            w = self.trajectory_list[x]
+            self.world.debug.draw_point(w.transform.location, size=0.2, life_time=lifetime, color=carla.Color(r=0, g=0, b=255))
+        # color goal point in red   
+        self.world.debug.draw_point(self.trajectory_list[-1].transform.location, size=0.3, life_time=lifetime, color=carla.Color(r=255, g=0, b=0))
 
     def step(self, action):
         # Easy actions: Steer left, center, right (0, 1, 2)
@@ -153,37 +163,10 @@ class Environment:
             self.vehicle.apply_control(carla.VehicleControl(throttle=0, steer=1))
 
         self.tick_world()
-
-        # # Get velocity of vehicle
-        # v = self.vehicle.get_velocity()
-        # v_kmh = int(3.6 * math.sqrt(v.x**2 + v.y**2 + v.z**2))
-        # v_m_s = ((v_kmh * 1000) / 60) / 60
-        # lon_speed = self.get_vehicle_lon_speed(self.vehicle)
-
-        # # Set reward and 'done' flag
-        # reward_collision = 0
-        # out_of_map = 0
-        # r_fast = 0
-
-        # done = False
-        # if len(self.collision_hist) != 0:
-        #     # print(f"Collided with v = {v_kmh} km/h")
-        #     done = True
-        #     reward_collision = -1
-        
-        # if v_m_s > 8:
-        #     r_fast = -1
-
-
-        # ego_transform = self.agent_transform
-        # ego_map_point = self.getEgoWaypoint()
-        # distance_ego = ego_transform.location.distance(ego_map_point.transform.location)
-        # if distance_ego > 1.:
-        #     out_of_map = -1
-
-        # reward =  200*reward_collision + lon_speed + 10*r_fast + out_of_map -5*alpha + 0.2r_lat - 0.1
-
         reward, done = self._get_reward()
+
+        if self.roadGraph and self.fps_counter % 10 == 0:
+            self.plotTrajectory()
 
         return self.get_observation(), reward, done, None
     
@@ -255,23 +238,6 @@ class Environment:
         dis = - lv * cross
         return dis, w
     
-    def get_vehicle_lon_speed(carla_vehicle: carla.Vehicle):
-        """
-            Get the longitudinal speed of a carla vehicle
-            :param carla_vehicle: the carla vehicle
-            :type carla_vehicle: carla.Vehicle
-            :return: speed of a carla vehicle [m/s]
-            :rtype: float64
-        """
-        carla_velocity_vec3 = carla_vehicle.get_velocity()
-        vec4 = np.array([carla_velocity_vec3.x,
-                            carla_velocity_vec3.y,
-                            carla_velocity_vec3.z, 1]).reshape(4, 1)
-        carla_trans = np.array(carla_vehicle.get_transform().get_matrix())
-        carla_trans.reshape(4, 4)
-        carla_trans[0:3, 3] = 0.0
-        vel_in_vehicle = np.linalg.inv(carla_trans) @ vec4
-        return vel_in_vehicle[0]
 
     def getFPS_Counter(self):
         return self.fps_counter
@@ -281,6 +247,9 @@ class Environment:
             return True
         return False
 
+    def getGoalPoint(self):
+        return self.goalPoint
+    
     def getEgoWaypoint(self):
         # vehicle_loc = self.vehicle.get_location()
         vehicle_loc = self.agent_transform.location
