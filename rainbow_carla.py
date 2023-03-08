@@ -73,10 +73,11 @@ def init_clearML(clearmlOn, world):
     Task.add_requirements("moviepy", "1.0.3")
     task = Task.init(project_name="bogdoll/Anomaly_detection_Moritz", task_name="Test", output_uri="s3://tks-zx.fzi.de:9000/clearml")
     task.set_base_docker(
-            "nvcr.io/nvidia/pytorch:21.10-py3", 
-            docker_setup_bash_script="apt-get update && apt-get install -y python3-opencv",
-            docker_arguments="-e NVIDIA_DRIVER_CAPABILITIES=all"  # --ipc=host",   
-            )
+        docker_image="nvcr.io/nvidia/pytorch:22.12-py3",  # nvcr.io/nvidia/pytorch:22.12-py3 from https://catalog.ngc.nvidia.com/containers?filters=&orderBy=dateModifiedDESC&query=
+        docker_arguments="-e NVIDIA_DRIVER_CAPABILITIES=all --network=host",
+        docker_setup_bash_script=["apt-get install -y libgl1"],
+    )
+
     
     
     parameters = {
@@ -446,7 +447,7 @@ def main(clearmlOn):
 
     # train
     agent = DQNAgent(env, REPLAYBUFFER_SIZE, batch_size, target_update)
-    agent.train(num_frames, writer)
+    agent.train(num_frames=num_frames, writer=writer)
 
     # Evaluation (is_test)
 

@@ -38,7 +38,9 @@ class Environment:
         self.agent_transform = None
 
         self.trajectory_list = None
+        self.traj_wp_list = None
         self.roadGraph = roadGraph
+        self.goalPoint = None
         # Enable synchronous mode between server and client
         # self.settings = self.world.get_settings()
         # self.settings.synchronous_mode = True # Enables synchronous mode
@@ -62,7 +64,8 @@ class Environment:
 
     def init_ego(self):
         self.vehicle_bp = self.bp_lib.find("vehicle.tesla.model3")
-        self.ss_camera_bp = self.bp_lib.find("sensor.camera.semantic_segmentation")
+        # self.ss_camera_bp = self.bp_lib.find("sensor.camera.semantic_segmentation")
+        self.ss_camera_bp = self.bp_lib.find('sensor.camera.rgb')
         self.col_sensor_bp = self.bp_lib.find("sensor.other.collision")
 
         # Configure sensors
@@ -93,11 +96,10 @@ class Environment:
         self.actor_list.append(self.vehicle)
 
         # Attach and listen to image sensor (BEV Semantic Segmentation)
-        self.ss_cam = self.world.spawn_actor(
-            self.ss_camera_bp, self.ss_cam_transform, attach_to=self.vehicle, attachment_type=carla.AttachmentType.Rigid
-        )
+        self.ss_cam = self.world.spawn_actor(self.ss_camera_bp, self.ss_cam_transform, attach_to=self.vehicle, attachment_type=carla.AttachmentType.Rigid)
         self.actor_list.append(self.ss_cam)
         self.ss_cam.listen(lambda data: self.__process_sensor_data(data))
+
 
         # self.tick_world(times=10) Let's see if we need this anymore in 0.9.14
         self.fps_counter = 0
@@ -109,6 +111,9 @@ class Environment:
 
         
         self.tick_world(times=int(1 / FIXED_DELTA_SECONDS))
+        self.get_observation()
+
+        self.set_goalPoint()
         if self.roadGraph:
             self.plotTrajectory()
         
@@ -116,7 +121,6 @@ class Environment:
 
         obs = self.get_observation()
 
-        self.set_goalPoint()
 
         return obs
     
@@ -124,22 +128,24 @@ class Environment:
         ego_map_point = self.getEgoWaypoint() # closest map point to the spawn point
         tmp_trajectory_list = [ego_map_point]
         self.trajectory_list = [[ego_map_point.transform.location.x, ego_map_point.transform.location.y, ego_map_point.transform.rotation.yaw]]
+        self.traj_wp_list = [ego_map_point]
         for x in range(60):
             next_point = tmp_trajectory_list[-1].next(2.)[0]
             next_point = next_point.next(2.)[0]
             tmp_trajectory_list.append(next_point)
+            self.traj_wp_list.append(next_point)
             self.trajectory_list.append([next_point.transform.location.x, next_point.transform.location.y, next_point.transform.rotation.yaw])
 
-        self.getGoalPoint = self.trajectory_list[-1][:2]
+        self.goalPoint = self.trajectory_list[-1][:1]
 
     # plots the path from spawn to goal
     def plotTrajectory(self):
         lifetime=1.
-        for x in range(len(self.trajectory_list)-1):
-            w = self.trajectory_list[x]
+        for x in range(len(self.traj_wp_list)-1):
+            w = self.traj_wp_list[x]
             self.world.debug.draw_point(w.transform.location, size=0.2, life_time=lifetime, color=carla.Color(r=0, g=0, b=255))
         # color goal point in red   
-        self.world.debug.draw_point(self.trajectory_list[-1].transform.location, size=0.3, life_time=lifetime, color=carla.Color(r=255, g=0, b=0))
+        self.world.debug.draw_point(self.traj_wp_list[-1].transform.location, size=0.3, life_time=lifetime, color=carla.Color(r=255, g=0, b=0))
 
     def step(self, action):
         # Easy actions: Steer left, center, right (0, 1, 2)
@@ -189,9 +195,9 @@ class Environment:
         r_steer = -self.vehicle.get_control().steer**2
 
         # reward for out of lane
-        kk = self.get_Vehicle_positionVec()
-        ego_x = kk[0]
-        ego_y = kk[1]
+        ego_pos = self.get_Vehicle_positionVec()
+        ego_x = ego_pos[0]
+        ego_y = ego_pos[1]
         dis, w = self.get_lane_dis(self.trajectory_list, ego_x, ego_y)
         r_out = 0
         if abs(dis) > 2.0:
@@ -213,6 +219,11 @@ class Environment:
         r_lat = - abs(self.vehicle.get_control().steer) * lspeed_lon**2
 
         r = 200*r_collision + 1*lspeed_lon + 10*r_fast + 1*r_out + r_steer*5 + 0.2*r_lat - 0.1
+
+        dist = np.linalg.norm(ego_pos-self.goalPoint)
+        if dist < 2.0:
+            r = 1000
+            done = True
 
         return r, done
     
@@ -273,21 +284,46 @@ class Environment:
         position = self.vehicle.get_transform().location
         return np.array([position.x, position.y, position.z])
 
+    # ## semantic seg
+    # def get_observation(self):
+    #     """Observations in PyTorch format BCHW"""
+    #     self.agent_transform = self.get_Vehicle_transform()
+    #     image = self.observation.transpose((2, 0, 1))  # from HWC to CHW
+    #     image = np.ascontiguousarray(image, dtype=np.float32) / 255
+    #     image = torch.from_numpy(image)
+    #     image = image.unsqueeze(0)  # BCHW
+    #     return image
+
+    # rgb
     def get_observation(self):
-        """Observations in PyTorch format BCHW"""
+        """ Observations in PyTorch format BCHW """
         self.agent_transform = self.get_Vehicle_transform()
-        image = self.observation.transpose((2, 0, 1))  # from HWC to CHW
-        image = np.ascontiguousarray(image, dtype=np.float32) / 255
-        image = torch.from_numpy(image)
-        image = image.unsqueeze(0)  # BCHW
-        return image
+        frame = self.observation
+        frame = frame.astype(np.float32) / 255
+        frame = self.arrange_colorchannels(frame)
+        frame = np.transpose(frame, (2,0,1))
+        frame = torch.as_tensor(frame)
+        frame = frame.unsqueeze(0)
+        print(frame.shape)
+
+        return frame
 
     def close(self):
         print("Close")
 
+    # semantic seg
+    # def __process_sensor_data(self, image):
+    #     """Observations directly viewable with OpenCV in CHW format"""
+    #     image.convert(carla.ColorConverter.CityScapesPalette)
+    #     i = np.array(image.raw_data)
+    #     i2 = i.reshape((IM_HEIGHT, IM_WIDTH, 4))
+    #     i3 = i2[:, :, :3]
+    #     self.observation = i3
+
+    # rgb
     def __process_sensor_data(self, image):
-        """Observations directly viewable with OpenCV in CHW format"""
-        image.convert(carla.ColorConverter.CityScapesPalette)
+        """ Observations directly viewable with OpenCV in CHW format """
+        # image.convert(carla.ColorConverter.CityScapesPalette)
         i = np.array(image.raw_data)
         i2 = i.reshape((IM_HEIGHT, IM_WIDTH, 4))
         i3 = i2[:, :, :3]
@@ -295,6 +331,17 @@ class Environment:
 
     def __process_collision_data(self, event):
         self.collision_hist.append(event)
+
+    # changes order of color channels. Silly but works...
+    def arrange_colorchannels(self, image):
+        mock = image.transpose(2,1,0)
+        tmp = []
+        tmp.append(mock[2])
+        tmp.append(mock[1])
+        tmp.append(mock[0])
+        tmp = np.array(tmp)
+        tmp = tmp.transpose(2,1,0)
+        return tmp
 
     def __del__(self):
         for actor in self.actor_list:
