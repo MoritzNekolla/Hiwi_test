@@ -20,7 +20,7 @@ RESET_SLEEP_TIME = 1
 FIXED_DELTA_SECONDS = 0.1
 SUBSTEP_DELTA = 0.01
 MAX_SUBSTEPS = 10
-EPISODE_TIME = 30
+EPISODE_TIME = 20
 
 
 class Environment:
@@ -125,7 +125,6 @@ class Environment:
 
 
         # self.tick_world(times=10) Let's see if we need this anymore in 0.9.14
-        self.fps_counter = 0
 
         # Attach and listen to collision sensor
         self.col_sensor = self.world.spawn_actor(self.col_sensor_bp, self.col_sensor_transform, attach_to=self.vehicle)
@@ -134,11 +133,12 @@ class Environment:
 
         
         self.tick_world(times=int(1 / FIXED_DELTA_SECONDS))
+        self.fps_counter = 0
         self.agent_transform = self.get_Vehicle_transform()
 
         self.set_goalPoint()
-        # if self.roadGraph:
-        #     self.plotTrajectory()
+        if self.roadGraph:
+            self.plotTrajectory()
         
         self.episode_start = time.time()
 
@@ -152,7 +152,7 @@ class Environment:
         tmp_trajectory_list = [ego_map_point]
         self.trajectory_list = [[ego_map_point.transform.location.x, ego_map_point.transform.location.y, ego_map_point.transform.rotation.yaw]]
         self.traj_wp_list = [ego_map_point]
-        for x in range(20):
+        for x in range(40):
             next_point = tmp_trajectory_list[-1].next(2.)[0]
             next_point = next_point.next(2.)[0]
             tmp_trajectory_list.append(next_point)
@@ -163,7 +163,7 @@ class Environment:
 
     # plots the path from spawn to goal
     def plotTrajectory(self):
-        lifetime=0.4
+        lifetime=0.2
         for x in range(len(self.traj_wp_list)-2):
             w = self.traj_wp_list[x]
             w1 = self.traj_wp_list[x + 1]
@@ -173,7 +173,6 @@ class Environment:
 
     def step(self, action):
         # Easy actions: Steer left, center, right (0, 1, 2)
-        action = 0
         if action == 0:
             self.vehicle.apply_control(carla.VehicleControl(throttle=1.0, steer=0))
         elif action == 1:
@@ -231,7 +230,7 @@ class Environment:
         if abs(dis) > 2.0:
             r_out = -1
         
-        if abs(dis) > 4.:
+        if abs(dis) > 3.:
             done = True
         
         # longitudinal speed
@@ -254,8 +253,11 @@ class Environment:
         # print(self.trajectory_list[-1])
         # print(ego_pos)
         # print(abs(dis))
-        if abs(dis) < 3.0:
+        if abs(dis) < 2.0:
             r = 1000
+            done = True
+
+        if self.isTimeExpired():
             done = True
 
         return r, done
