@@ -24,7 +24,7 @@ EPISODE_TIME = 30
 
 
 class Environment:
-    def __init__(self, world="Town02", host="tks-harper.fzi.de", port=2000, roadGraph=True):
+    def __init__(self, world="Town02", host="tks-harper.fzi.de", port=2000, roadGraph=True, spawn_deviation=True):
         self.client = carla.Client(host, port)  # Connect to server
         self.client.set_timeout(10.0)
         self.world = self.client.load_world(world)
@@ -41,6 +41,7 @@ class Environment:
         self.traj_wp_list = None
         self.roadGraph = roadGraph
         self.goalPoint = None
+        self.spawn_deviation = spawn_deviation
         # Enable synchronous mode between server and client
         # self.settings = self.world.get_settings()
         # self.settings.synchronous_mode = True # Enables synchronous mode
@@ -92,6 +93,28 @@ class Environment:
 
         # Spawn vehicle
         transform = random.choice(self.spawn_points)
+        if self.spawn_deviation:
+            prob = random.random()
+            if prob < 0.3333:
+                deviation = random.random() * 0.45
+                prob = random.random()
+                if prob < 0.5:
+                    transform.location.x += deviation
+                    transform.location.y += deviation
+                else:
+                    transform.location.x -= deviation
+                    transform.location.y -= deviation
+
+                deviation = random.randrange(0,45)
+                if prob < 0.5:
+                    transform.rotation.yaw += deviation
+                    if transform.rotation.yaw > 360:
+                        transform.rotation.yaw = transform.rotation.yaw - 360
+                else:
+                    transform.rotation.yaw -= deviation
+                    if transform.rotation.yaw < 0:
+                        transform.rotation.yaw = transform.rotation.yaw * (-1)
+
         self.vehicle = self.world.spawn_actor(self.vehicle_bp, transform)
         self.actor_list.append(self.vehicle)
 
@@ -111,17 +134,17 @@ class Environment:
 
         
         self.tick_world(times=int(1 / FIXED_DELTA_SECONDS))
-        self.get_observation()
+        self.agent_transform = self.get_Vehicle_transform()
 
         self.set_goalPoint()
-        if self.roadGraph:
-            self.plotTrajectory()
+        # if self.roadGraph:
+        #     self.plotTrajectory()
         
         self.episode_start = time.time()
 
         obs = self.get_observation()
 
-
+        # print("--------------")
         return obs
     
     def set_goalPoint(self):
@@ -129,26 +152,28 @@ class Environment:
         tmp_trajectory_list = [ego_map_point]
         self.trajectory_list = [[ego_map_point.transform.location.x, ego_map_point.transform.location.y, ego_map_point.transform.rotation.yaw]]
         self.traj_wp_list = [ego_map_point]
-        for x in range(60):
+        for x in range(20):
             next_point = tmp_trajectory_list[-1].next(2.)[0]
             next_point = next_point.next(2.)[0]
             tmp_trajectory_list.append(next_point)
             self.traj_wp_list.append(next_point)
             self.trajectory_list.append([next_point.transform.location.x, next_point.transform.location.y, next_point.transform.rotation.yaw])
 
-        self.goalPoint = self.trajectory_list[-1][:1]
+        self.goalPoint = self.trajectory_list[-1]
 
     # plots the path from spawn to goal
     def plotTrajectory(self):
-        lifetime=1.
-        for x in range(len(self.traj_wp_list)-1):
+        lifetime=0.4
+        for x in range(len(self.traj_wp_list)-2):
             w = self.traj_wp_list[x]
-            self.world.debug.draw_point(w.transform.location, size=0.2, life_time=lifetime, color=carla.Color(r=0, g=0, b=255))
+            w1 = self.traj_wp_list[x + 1]
+            self.world.debug.draw_line(w.transform.location, w1.transform.location, thickness=0.15, life_time=lifetime, color=carla.Color(r=255, g=0, b=0))
         # color goal point in red   
         self.world.debug.draw_point(self.traj_wp_list[-1].transform.location, size=0.3, life_time=lifetime, color=carla.Color(r=255, g=0, b=0))
 
     def step(self, action):
         # Easy actions: Steer left, center, right (0, 1, 2)
+        action = 0
         if action == 0:
             self.vehicle.apply_control(carla.VehicleControl(throttle=1.0, steer=0))
         elif action == 1:
@@ -169,10 +194,13 @@ class Environment:
             self.vehicle.apply_control(carla.VehicleControl(throttle=0, steer=1))
 
         self.tick_world()
+        # if self.roadGraph:
+        #     self.plotTrajectory()
+
         reward, done = self._get_reward()
 
-        if self.roadGraph and self.fps_counter % 10 == 0:
-            self.plotTrajectory()
+        # if self.roadGraph and self.fps_counter % 10 == 0:
+        #     self.plotTrajectory()
 
         return self.get_observation(), reward, done, None
     
@@ -202,9 +230,10 @@ class Environment:
         r_out = 0
         if abs(dis) > 2.0:
             r_out = -1
+        
+        if abs(dis) > 4.:
             done = True
         
-
         # longitudinal speed
         lspeed = np.array([v.x, v.y])
         lspeed_lon = np.dot(lspeed, w)
@@ -220,8 +249,12 @@ class Environment:
 
         r = 200*r_collision + 1*lspeed_lon + 10*r_fast + 1*r_out + r_steer*5 + 0.2*r_lat - 0.1
 
-        dist = np.linalg.norm(ego_pos-self.goalPoint)
-        if dist < 2.0:
+
+        dis = d = np.sqrt((ego_x-self.goalPoint[0])**2 + (ego_y-self.goalPoint[1])**2)
+        # print(self.trajectory_list[-1])
+        # print(ego_pos)
+        # print(abs(dis))
+        if abs(dis) < 3.0:
             r = 1000
             done = True
 
@@ -235,7 +268,7 @@ class Environment:
         :param y: y position of vehicle
         :return: a tuple of the distance and the closest waypoint orientation
         """
-        dis_min = 1000
+        dis_min = 999999
         waypt = waypoints[0]
         for pt in waypoints:
             d = np.sqrt((x-pt[0])**2 + (y-pt[1])**2)
@@ -297,6 +330,9 @@ class Environment:
     # rgb
     def get_observation(self):
         """ Observations in PyTorch format BCHW """
+        
+        if self.roadGraph:
+            self.plotTrajectory()
         self.agent_transform = self.get_Vehicle_transform()
         frame = self.observation
         frame = frame.astype(np.float32) / 255
@@ -304,7 +340,7 @@ class Environment:
         frame = np.transpose(frame, (2,0,1))
         frame = torch.as_tensor(frame)
         frame = frame.unsqueeze(0)
-        print(frame.shape)
+        # print(frame.shape)
 
         return frame
 

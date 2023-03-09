@@ -35,6 +35,7 @@ from moviepy import editor as mpy
 HOST = "tks-holden.fzi.de"
 PORT = 2200
 WORLDS = ["Town01_Opt", "Town02_Opt", "Town03_Opt", "Town04_Opt","Town05_Opt"]
+# WORLDS = ["Town04_Opt"]
 SPAWN_DEVIATION = True
 TRAJECTORY_VISIBLE = True
 GOAL_STATE = True
@@ -71,7 +72,8 @@ def init_clearML(clearmlOn, world):
     )
     # Task.add_requirements("requirements.txt")
     Task.add_requirements("moviepy", "1.0.3")
-    task = Task.init(project_name="bogdoll/Anomaly_detection_Moritz", task_name="Test", output_uri="s3://tks-zx.fzi.de:9000/clearml")
+    # task = Task.init(project_name="bogdoll/Anomaly_detection_Moritz", task_name="Test", output_uri="s3://tks-zx.fzi.de:9000/clearml")
+    task = Task.init(project_name="bogdoll/rainbow", task_name="Test", output_uri="s3://tks-zx.fzi.de:9000/clearml")
     task.set_base_docker(
         docker_image="nvcr.io/nvidia/pytorch:22.12-py3",  # nvcr.io/nvidia/pytorch:22.12-py3 from https://catalog.ngc.nvidia.com/containers?filters=&orderBy=dateModifiedDESC&query=
         docker_arguments="-e NVIDIA_DRIVER_CAPABILITIES=all --network=host",
@@ -423,7 +425,7 @@ def main(clearmlOn):
     writer = SummaryWriter()
 
     # environment
-    env = Environment(world=world, host=HOST, port=PORT)  # This would be better as a command line argument
+    env = Environment(world=world, host=HOST, port=PORT, roadGraph=TRAJECTORY_VISIBLE, spawn_deviation=SPAWN_DEVIATION)  # This would be better as a command line argument
     env.init_ego()
 
     seed = 777
