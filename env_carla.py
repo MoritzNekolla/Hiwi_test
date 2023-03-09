@@ -24,7 +24,7 @@ EPISODE_TIME = 20
 
 
 class Environment:
-    def __init__(self, world="Town02", host="tks-harper.fzi.de", port=2000, roadGraph=True, spawn_deviation=True):
+    def __init__(self, world="Town02", host="tks-harper.fzi.de", port=2000, roadGraph=True, spawn_deviation=True, semantic_seg=True):
         self.client = carla.Client(host, port)  # Connect to server
         self.client.set_timeout(10.0)
         self.world = self.client.load_world(world)
@@ -42,6 +42,7 @@ class Environment:
         self.roadGraph = roadGraph
         self.goalPoint = None
         self.spawn_deviation = spawn_deviation
+        self.semantic_seg = semantic_seg
         # Enable synchronous mode between server and client
         # self.settings = self.world.get_settings()
         # self.settings.synchronous_mode = True # Enables synchronous mode
@@ -65,8 +66,10 @@ class Environment:
 
     def init_ego(self):
         self.vehicle_bp = self.bp_lib.find("vehicle.tesla.model3")
-        # self.ss_camera_bp = self.bp_lib.find("sensor.camera.semantic_segmentation")
-        self.ss_camera_bp = self.bp_lib.find('sensor.camera.rgb')
+        if self.semantic_seg:
+            self.ss_camera_bp = self.bp_lib.find("sensor.camera.semantic_segmentation")
+        else:
+            self.ss_camera_bp = self.bp_lib.find('sensor.camera.rgb')
         self.col_sensor_bp = self.bp_lib.find("sensor.other.collision")
 
         # Configure sensors
@@ -149,27 +152,41 @@ class Environment:
     
     def set_goalPoint(self):
         ego_map_point = self.getEgoWaypoint() # closest map point to the spawn point
+        # print(ego_map_point)
         tmp_trajectory_list = [ego_map_point]
         self.trajectory_list = [[ego_map_point.transform.location.x, ego_map_point.transform.location.y, ego_map_point.transform.rotation.yaw]]
         self.traj_wp_list = [ego_map_point]
-        for x in range(40):
+        for x in range(80):
             next_point = tmp_trajectory_list[-1].next(2.)[0]
-            next_point = next_point.next(2.)[0]
+            # next_point = next_point.next(2.)[0]
             tmp_trajectory_list.append(next_point)
             self.traj_wp_list.append(next_point)
             self.trajectory_list.append([next_point.transform.location.x, next_point.transform.location.y, next_point.transform.rotation.yaw])
 
         self.goalPoint = self.trajectory_list[-1]
 
+        # for k in self.trajectory_list:
+        #     print(k)
+
+        # print("----------")
     # plots the path from spawn to goal
     def plotTrajectory(self):
-        lifetime=0.2
-        for x in range(len(self.traj_wp_list)-2):
-            w = self.traj_wp_list[x]
-            w1 = self.traj_wp_list[x + 1]
-            self.world.debug.draw_line(w.transform.location, w1.transform.location, thickness=0.15, life_time=lifetime, color=carla.Color(r=255, g=0, b=0))
-        # color goal point in red   
-        self.world.debug.draw_point(self.traj_wp_list[-1].transform.location, size=0.3, life_time=lifetime, color=carla.Color(r=255, g=0, b=0))
+        if self.semantic_seg:
+            lifetime=2.
+            for x in range(len(self.traj_wp_list)-2):
+                w = self.traj_wp_list[x]
+                w1 = self.traj_wp_list[x + 1]
+                self.world.debug.draw_line(w.transform.location, w1.transform.location, thickness=0.15, life_time=lifetime, color=carla.Color(r=0, g=0, b=0))
+            # color goal point in red   
+            self.world.debug.draw_point(self.traj_wp_list[-1].transform.location, size=0.3, life_time=lifetime, color=carla.Color(r=0, g=0, b=0))
+        else:
+            lifetime=0.4
+            for x in range(len(self.traj_wp_list)-2):
+                w = self.traj_wp_list[x]
+                w1 = self.traj_wp_list[x + 1]
+                self.world.debug.draw_line(w.transform.location, w1.transform.location, thickness=0.15, life_time=lifetime, color=carla.Color(r=255, g=0, b=0))
+            # color goal point in red   
+            self.world.debug.draw_point(self.traj_wp_list[-1].transform.location, size=0.3, life_time=lifetime, color=carla.Color(r=255, g=0, b=0))
 
     def step(self, action):
         # Easy actions: Steer left, center, right (0, 1, 2)
@@ -331,20 +348,26 @@ class Environment:
 
     # rgb
     def get_observation(self):
-        """ Observations in PyTorch format BCHW """
-        
-        if self.roadGraph:
-            self.plotTrajectory()
-        self.agent_transform = self.get_Vehicle_transform()
-        frame = self.observation
-        frame = frame.astype(np.float32) / 255
-        frame = self.arrange_colorchannels(frame)
-        frame = np.transpose(frame, (2,0,1))
-        frame = torch.as_tensor(frame)
-        frame = frame.unsqueeze(0)
-        # print(frame.shape)
-
-        return frame
+        if self.semantic_seg:
+            """Observations in PyTorch format BCHW"""
+            self.agent_transform = self.get_Vehicle_transform()
+            image = self.observation.transpose((2, 0, 1))  # from HWC to CHW
+            image = np.ascontiguousarray(image, dtype=np.float32) / 255
+            image = torch.from_numpy(image)
+            image = image.unsqueeze(0)  # BCHW
+            return image
+        else: 
+            if self.roadGraph:
+                self.plotTrajectory()
+            self.agent_transform = self.get_Vehicle_transform()
+            frame = self.observation
+            frame = frame.astype(np.float32) / 255
+            frame = self.arrange_colorchannels(frame)
+            frame = np.transpose(frame, (2,0,1))
+            frame = torch.as_tensor(frame)
+            frame = frame.unsqueeze(0)
+            # print(frame.shape)
+            return frame
 
     def close(self):
         print("Close")
@@ -360,12 +383,20 @@ class Environment:
 
     # rgb
     def __process_sensor_data(self, image):
-        """ Observations directly viewable with OpenCV in CHW format """
-        # image.convert(carla.ColorConverter.CityScapesPalette)
-        i = np.array(image.raw_data)
-        i2 = i.reshape((IM_HEIGHT, IM_WIDTH, 4))
-        i3 = i2[:, :, :3]
-        self.observation = i3
+        if self.semantic_seg:
+            """Observations directly viewable with OpenCV in CHW format"""
+            image.convert(carla.ColorConverter.CityScapesPalette)
+            i = np.array(image.raw_data)
+            i2 = i.reshape((IM_HEIGHT, IM_WIDTH, 4))
+            i3 = i2[:, :, :3]
+            self.observation = i3
+        else:
+            """ Observations directly viewable with OpenCV in CHW format """
+            # image.convert(carla.ColorConverter.CityScapesPalette)
+            i = np.array(image.raw_data)
+            i2 = i.reshape((IM_HEIGHT, IM_WIDTH, 4))
+            i3 = i2[:, :, :3]
+            self.observation = i3
 
     def __process_collision_data(self, event):
         self.collision_hist.append(event)

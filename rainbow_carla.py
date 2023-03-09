@@ -34,12 +34,13 @@ from moviepy import editor as mpy
 ##
 HOST = "tks-holden.fzi.de"
 PORT = 2200
-WORLDS = ["Town01_Opt", "Town02_Opt", "Town03_Opt", "Town04_Opt","Town05_Opt"]
-# WORLDS = ["Town04_Opt"]
+WORLDS = ["Town01","Town02","Town04","Town05","Town06","Town07","Town10","Town12"] # town_03 zu viele Tunnel
+WORLDS = ["Town10"]
 SPAWN_DEVIATION = True
 TRAJECTORY_VISIBLE = True
 GOAL_STATE = True
 LIDAR = False
+SEMANTIC_SEG = False
 REPLAYBUFFER_SIZE = 5000
 
 
@@ -90,6 +91,7 @@ def init_clearML(clearmlOn, world):
         "trajectory_is_visible": TRAJECTORY_VISIBLE,
         "goal_state_exists": GOAL_STATE,
         "addtional_lidar": LIDAR,
+        "semantic_segmentation_on": SEMANTIC_SEG,
         "replaybuffer_size": REPLAYBUFFER_SIZE
     }
     #start ClearML logging
@@ -425,7 +427,7 @@ def main(clearmlOn):
     writer = SummaryWriter()
 
     # environment
-    env = Environment(world=world, host=HOST, port=PORT, roadGraph=TRAJECTORY_VISIBLE, spawn_deviation=SPAWN_DEVIATION)  # This would be better as a command line argument
+    env = Environment(world=world, host=HOST, port=PORT, roadGraph=TRAJECTORY_VISIBLE, spawn_deviation=SPAWN_DEVIATION, semantic_seg=SEMANTIC_SEG)  # This would be better as a command line argument
     env.init_ego()
 
     seed = 777
