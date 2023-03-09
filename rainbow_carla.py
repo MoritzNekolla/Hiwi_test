@@ -32,15 +32,15 @@ from env_carla import IM_HEIGHT, IM_WIDTH, N_ACTIONS
 from moviepy import editor as mpy
 
 ##
-HOST = "tks-holden.fzi.de"
+HOST = "ids-ford.fzi.de"
 PORT = 2200
-WORLDS = ["Town01","Town02","Town04","Town05","Town06","Town07","Town10","Town12"] # town_03 zu viele Tunnel
-WORLDS = ["Town10"]
+WORLDS = ["Town01","Town04","Town05","Town06","Town07"] # town_03 zu viele Tunnel | 02 debughelper not working
+WORLDS = ["Town02"]
 SPAWN_DEVIATION = True
 TRAJECTORY_VISIBLE = True
 GOAL_STATE = True
 LIDAR = False
-SEMANTIC_SEG = False
+SEMANTIC_SEG = True
 REPLAYBUFFER_SIZE = 5000
 
 

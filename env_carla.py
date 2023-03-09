@@ -95,30 +95,33 @@ class Environment:
         self.collision_hist = []
 
         # Spawn vehicle
-        transform = random.choice(self.spawn_points)
-        if self.spawn_deviation:
-            prob = random.random()
-            if prob < 0.3333:
-                deviation = random.random() * 0.45
+        spawn_failed = True
+        while spawn_failed:
+            transform = random.choice(self.spawn_points)
+            if self.spawn_deviation:
                 prob = random.random()
-                if prob < 0.5:
-                    transform.location.x += deviation
-                    transform.location.y += deviation
-                else:
-                    transform.location.x -= deviation
-                    transform.location.y -= deviation
+                if prob < 0.3333:
+                    deviation = random.random() * 0.45
+                    prob = random.random()
+                    if prob < 0.5:
+                        transform.location.x += deviation
+                        transform.location.y += deviation
+                    else:
+                        transform.location.x -= deviation
+                        transform.location.y -= deviation
 
-                deviation = random.randrange(0,45)
-                if prob < 0.5:
-                    transform.rotation.yaw += deviation
-                    if transform.rotation.yaw > 360:
-                        transform.rotation.yaw = transform.rotation.yaw - 360
-                else:
-                    transform.rotation.yaw -= deviation
-                    if transform.rotation.yaw < 0:
-                        transform.rotation.yaw = transform.rotation.yaw * (-1)
+                    deviation = random.randrange(0,45)
+                    if prob < 0.5:
+                        transform.rotation.yaw += deviation
+                        if transform.rotation.yaw > 360:
+                            transform.rotation.yaw = transform.rotation.yaw - 360
+                    else:
+                        transform.rotation.yaw -= deviation
+                        if transform.rotation.yaw < 0:
+                            transform.rotation.yaw = transform.rotation.yaw * (-1)
 
-        self.vehicle = self.world.spawn_actor(self.vehicle_bp, transform)
+            self.vehicle = self.world.try_spawn_actor(self.vehicle_bp, transform)
+            if not self.vehicle == None: spawn_failed = False
         self.actor_list.append(self.vehicle)
 
         # Attach and listen to image sensor (BEV Semantic Segmentation)
@@ -171,22 +174,17 @@ class Environment:
         # print("----------")
     # plots the path from spawn to goal
     def plotTrajectory(self):
-        if self.semantic_seg:
-            lifetime=2.
-            for x in range(len(self.traj_wp_list)-2):
-                w = self.traj_wp_list[x]
-                w1 = self.traj_wp_list[x + 1]
-                self.world.debug.draw_line(w.transform.location, w1.transform.location, thickness=0.15, life_time=lifetime, color=carla.Color(r=0, g=0, b=0))
-            # color goal point in red   
-            self.world.debug.draw_point(self.traj_wp_list[-1].transform.location, size=0.3, life_time=lifetime, color=carla.Color(r=0, g=0, b=0))
-        else:
-            lifetime=0.4
-            for x in range(len(self.traj_wp_list)-2):
-                w = self.traj_wp_list[x]
-                w1 = self.traj_wp_list[x + 1]
-                self.world.debug.draw_line(w.transform.location, w1.transform.location, thickness=0.15, life_time=lifetime, color=carla.Color(r=255, g=0, b=0))
-            # color goal point in red   
-            self.world.debug.draw_point(self.traj_wp_list[-1].transform.location, size=0.3, life_time=lifetime, color=carla.Color(r=255, g=0, b=0))
+        stretch = 0.3
+        lifetime=0.2
+        for x in range(len(self.traj_wp_list)-1):
+            w = self.traj_wp_list[x]
+            w1 = self.traj_wp_list[x + 1]
+            L_w = carla.Location(x=w.transform.location.x,y=w.transform.location.y,z=w.transform.location.z + stretch)
+            L_w1 = carla.Location(x=w1.transform.location.x,y=w1.transform.location.y,z=w1.transform.location.z + stretch)
+            self.world.debug.draw_line(L_w, L_w1, thickness=0.1, life_time=lifetime, color=carla.Color(r=255, g=255, b=255))
+        # color goal point in red 
+        L_w = carla.Location(x=self.traj_wp_list[-1].transform.location.x,y=self.traj_wp_list[-1].transform.location.y,z=self.traj_wp_list[-1].transform.location.z + stretch)
+        self.world.debug.draw_point(L_w, size=0.3, life_time=lifetime, color=carla.Color(r=255, g=0, b=0))
 
     def step(self, action):
         # Easy actions: Steer left, center, right (0, 1, 2)
@@ -348,6 +346,8 @@ class Environment:
 
     # rgb
     def get_observation(self):
+        if self.roadGraph:
+            self.plotTrajectory()
         if self.semantic_seg:
             """Observations in PyTorch format BCHW"""
             self.agent_transform = self.get_Vehicle_transform()
@@ -357,8 +357,6 @@ class Environment:
             image = image.unsqueeze(0)  # BCHW
             return image
         else: 
-            if self.roadGraph:
-                self.plotTrajectory()
             self.agent_transform = self.get_Vehicle_transform()
             frame = self.observation
             frame = frame.astype(np.float32) / 255
