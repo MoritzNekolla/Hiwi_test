@@ -32,15 +32,15 @@ from env_carla import IM_HEIGHT, IM_WIDTH, N_ACTIONS
 from moviepy import editor as mpy
 
 ##
-HOST = "ids-ford.fzi.de"
+HOST = "tks-holden.fzi.de"
 PORT = 2200
 WORLDS = ["Town01","Town04","Town05","Town06","Town07"] # town_03 zu viele Tunnel | 02 debughelper not working
-WORLDS = ["Town02"]
+# WORLDS = ["Town02"]
 SPAWN_DEVIATION = True
 TRAJECTORY_VISIBLE = True
 GOAL_STATE = True
 LIDAR = False
-SEMANTIC_SEG = True
+SEMANTIC_SEG = False
 REPLAYBUFFER_SIZE = 5000
 
 
@@ -445,7 +445,7 @@ def main(clearmlOn):
     seed_torch(seed)
 
     # parameters
-    num_frames = 40_000
+    num_frames = 1_000_000
     batch_size = 128
     target_update = 100
 
