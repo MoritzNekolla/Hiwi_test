@@ -35,7 +35,7 @@ from moviepy import editor as mpy
 HOST = "tks-holden.fzi.de"
 PORT = 2200
 WORLDS = ["Town01","Town04","Town05","Town06","Town07"] # town_03 zu viele Tunnel | 02 debughelper not working
-# WORLDS = ["Town02"]
+WORLDS = ["Town01"]
 SPAWN_DEVIATION = True
 TRAJECTORY_VISIBLE = True
 GOAL_STATE = True
@@ -217,6 +217,7 @@ class DQNAgent:
 
         if not self.is_test:
             self.transition = [state, selected_action]
+        self.dqn.reset_noise()
 
         return selected_action
 
